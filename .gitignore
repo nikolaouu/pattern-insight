@@ -1,0 +1,7 @@
+.venv/
+.idea/
+__pycache__/
+private_notebooks/
+*.pyc
+.ipynb_checkpoints/
+github_token.txt
