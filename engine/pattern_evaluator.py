@@ -16,6 +16,8 @@ class PatternEvaluator:
         self.failed_patterns_detected = []
         self.invalidated_patterns_detected = []
 
+        self.padding_right = 5
+
     def plot_patterns(self, candles, lookback, sessions_open, mode=None, charts_per_plot=8, title=""):
         # mode can have one of those values ['all', 'successful', 'failed', 'invalidated']
 
@@ -38,10 +40,8 @@ class PatternEvaluator:
         plotter = Plotter()
         plots = []
 
-        a = 5
-
         for p in list_to_use:
-            plot_candles = candles[p-lookback : p + sessions_open+a]
+            plot_candles = candles[p-lookback : p + sessions_open+self.padding_right]
             plots.append(plot_candles)
 
         actual_plots, i = [], 0
@@ -63,9 +63,7 @@ class PatternEvaluator:
         self.failed_patterns_detected = []
         self.invalidated_patterns_detected = []
 
-        a = 5
-
-        for c in range(look_back, len(candles) - sessions_open - a):
+        for c in range(look_back, len(candles) - sessions_open - self.padding_right):
 
             if candles[c]['timestamp'] > end_epoch or not self.is_pattern(candles, c):
                 continue

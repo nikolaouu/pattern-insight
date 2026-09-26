@@ -132,6 +132,8 @@ class PatternEngine:
             fail_rate = []
             invalid_rate = []
 
+            print(type(self.all_stats))
+
             for sessions_open, stats_list in self.all_stats:
 
                 stats = stats_list[i]
@@ -174,13 +176,6 @@ class PatternEngine:
                 mode=mode
             )
 
-    # TODO broken function, not important. can be deleted or fixed
-    def show_summerize_stats(self):
-
-        plotter = Plotter()
-
-        plotter.plot_sessions_analysis(self._summer(), title="Effect on pattern performance")
-
     def _summer(self):
 
         summary = {}
@@ -204,7 +199,7 @@ class PatternEngine:
 
         return summary
 
-    def run(self, show_results=True, plot_patterns='invalidated'):
+    def run(self, show_results=True, plot_patterns=False):
 
         self.all_stats = []
 
