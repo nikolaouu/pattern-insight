@@ -1,48 +1,39 @@
-import csv
-from datetime import datetime
+import pandas as pd
 
 
 class CandlesLoader:
 
     def __init__(self, filename):
-
         self.filename = filename
-        self._cache = None
+        self._cache_df = None
 
-    def load_all(self):
+    def load_all(self) -> pd.DataFrame:
+        if self._cache_df is not None:
+            return self._cache_df
 
-        if self._cache is not None:
-            return self._cache
+        df = pd.read_csv(self.filename, skipinitialspace=True)
 
-        candles = []
+        df.columns = df.columns.str.strip()
 
-        with open(self.filename, 'r') as f:
+        df['TIMESTAMP'] = df['TIMESTAMP'].astype(int)
+        df['DATE'] = pd.to_datetime(df['DATE'], format="%d/%m/%Y").dt.date
+        df['TIME'] = pd.to_datetime(df['TIME'], format="%H:%M:%S").dt.time
 
-            reader = csv.reader(f)
-            next(reader)
+        float_cols = ['OPEN', 'HIGH', 'LOW', 'CLOSE', 'VOLUME']
+        df[float_cols] = df[float_cols].astype(float)
 
-            for row in reader:
-                candles.append({
-                    'timestamp': int(row[0].strip()),
-                    'date': datetime.strptime(row[1].strip(), "%d/%m/%Y"),
-                    'time': datetime.strptime(row[2].strip(), "%H:%M:%S").time(),
-                    'open': float(row[3].strip()),
-                    'high': float(row[4].strip()),
-                    'low': float(row[5].strip()),
-                    'close': float(row[6].strip()),
-                    'volume': float(row[7].strip()),
-                })
+        self._cache = df
+        return df
 
-        self._cache = candles
-        return candles
+    def get_range(self, start_epoch, end_epoch, start_session_offset=0, end_session_offset=0) -> pd.DataFrame:
+        df = self.load_all()
 
-    def get_range(self, start_epoch, end_epoch, start_session_offset=0, end_session_offset=0):
-
-        candles = self.load_all()
-
-        if len(candles) > 2:
-            epochs_per_session = candles[1]['timestamp'] - candles[0]['timestamp']
+        if len(df) > 1:
+            epochs_per_session = df['TIMESTAMP'].iloc[1] - df['TIMESTAMP'].iloc[0]
             end_epoch += end_session_offset * epochs_per_session
             start_epoch += start_session_offset * epochs_per_session
 
-        return [c for c in candles if start_epoch <= c['timestamp'] <= end_epoch]
+        mask = (df['TIMESTAMP'] >= start_epoch) & (df['TIMESTAMP'] <= end_epoch)
+        filtered_df = df[mask]
+
+        return filtered_df.reset_index(drop=True)

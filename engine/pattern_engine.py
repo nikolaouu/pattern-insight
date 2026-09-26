@@ -132,8 +132,6 @@ class PatternEngine:
             fail_rate = []
             invalid_rate = []
 
-            print(type(self.all_stats))
-
             for sessions_open, stats_list in self.all_stats:
 
                 stats = stats_list[i]

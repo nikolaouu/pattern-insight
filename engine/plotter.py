@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from mplfinance.original_flavor import candlestick_ohlc
@@ -96,18 +97,24 @@ class Plotter:
     def plot_patterns(self, plots, charts_per_plot, title=""):
 
         final_plots = []
-        for i in range(len(plots)):
+
+        for df_slice in plots:
 
             temp_p = []
 
-            for candle in plots[i]:
+            for row in df_slice.itertuples():
+
+                if hasattr(row, 'DATE') and hasattr(row, 'TIME'):
+                    dt_val = pd.to_datetime(f"{row.DATE} {row.TIME}")
+                else:
+                    dt_val = pd.to_datetime(row.DATE)
 
                 new_candle = (
-                    mdates.date2num(candle['date']),
-                    candle['open'],
-                    candle['high'],
-                    candle['low'],
-                    candle['close']
+                    mdates.date2num(dt_val),
+                    row.OPEN,
+                    row.HIGH,
+                    row.LOW,
+                    row.CLOSE
                 )
 
                 temp_p.append(new_candle)

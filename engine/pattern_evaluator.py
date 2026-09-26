@@ -41,7 +41,7 @@ class PatternEvaluator:
         plots = []
 
         for p in list_to_use:
-            plot_candles = candles[p-lookback : p + sessions_open+self.padding_right]
+            plot_candles = candles.iloc[p - lookback : p + sessions_open + self.padding_right]
             plots.append(plot_candles)
 
         actual_plots, i = [], 0
@@ -65,7 +65,7 @@ class PatternEvaluator:
 
         for c in range(look_back, len(candles) - sessions_open - self.padding_right):
 
-            if candles[c]['timestamp'] > end_epoch or not self.is_pattern(candles, c):
+            if candles.at[c, 'TIMESTAMP'] > end_epoch or not self.is_pattern(candles, c):
                 continue
 
             pattern = self._build_pattern(candles, c, sessions_open)
@@ -84,14 +84,14 @@ class PatternEvaluator:
 
     def _build_pattern(self, candles, index, sessions_open):
         return Pattern(
-            open_price=candles[index]['close'],
+            open_price=candles.at[index, 'CLOSE'],
             invalidation_price=self.get_invalidation_val(candles, index),
-            close_price=candles[index + sessions_open]['close']
+            close_price=candles.at[index + sessions_open, 'CLOSE']
         )
 
     def _evaluate_pattern(self, pattern, candles, idx, sessions_open):
 
-        for i in range(idx+1, idx + sessions_open + 1):
+        for i in range(idx + 1, idx + sessions_open + 1):
             if self.is_invalidated(pattern, candles, i):
                 return 'invalidated'
 
