@@ -48,6 +48,8 @@ class PatternEngine:
         table.add_column("Failed %", style="bright_red", justify="center")
         table.add_column("Invalidated %", style="bright_magenta", justify="center")
         table.add_column("Avg Success Price Change %", style="bright_green", justify="center")
+        table.add_column("Avg MFE %", style="bright_cyan", justify="center")
+        table.add_column("Avg MAE %", style="bright_cyan", justify="center")
 
         n = len(stats_list)
         for i in range(n):
@@ -66,7 +68,9 @@ class PatternEngine:
                 f"{int(stats['failed'] / total * 100)}",
                 f"{int(stats['invalidated'] / total * 100)}",
                 f"{round(stats['avg_price_change_per_successful'] * 100, 3)}",
-                end_section = i == n-1
+                f"{round(stats.get('avg_mfe', 0.0) * 100, 3)}",
+                f"{round(stats.get('avg_mae', 0.0) * 100, 3)}",
+                end_section=i == n - 1
             )
 
         total_sum = sum(s["total"] for s in stats_list)
@@ -81,8 +85,13 @@ class PatternEngine:
         invalidated_pct = int(invalidated_sum / total_sum_safe * 100)
 
         weighted_sum_price_change = sum(s["avg_price_change_per_successful"] * s["successful"] for s in stats_list)
-
         avg_success_price_change_pct = ((weighted_sum_price_change / (successful_sum or 1)) * 100)
+
+        weighted_sum_mfe = sum(s.get("avg_mfe", 0.0) * s["total"] for s in stats_list)
+        avg_mfe_pct = (weighted_sum_mfe / total_sum_safe) * 100
+
+        weighted_sum_mae = sum(s.get("avg_mae", 0.0) * s["total"] for s in stats_list)
+        avg_mae_pct = (weighted_sum_mae / total_sum_safe) * 100
 
         table.add_row(
             "[bright_yellow]SUM[/bright_yellow]",
@@ -94,6 +103,8 @@ class PatternEngine:
             f"{failed_pct}",
             f"{invalidated_pct}",
             f"{round(avg_success_price_change_pct, 3)}",
+            f"{round(avg_mfe_pct, 3)}",
+            f"{round(avg_mae_pct, 3)}",
             end_section=True
         )
 

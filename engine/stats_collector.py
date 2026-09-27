@@ -14,12 +14,16 @@ class StatsCollector:
             'successful': 0,
             'failed': 0,
             'invalidated': 0,
-            'sum_price_change_success': 0.0
+            'sum_price_change_success': 0.0,
+            'sum_mfe': 0.0,
+            'sum_mae': 0.0,
         })
 
     def update(self, pattern, status):
 
         self.stats['total'] += 1
+        self.stats['sum_mfe'] += pattern.mfe
+        self.stats['sum_mae'] += pattern.mae
 
         if status == 'successful':
             self.stats['successful'] += 1
@@ -36,9 +40,13 @@ class StatsCollector:
 
         s = dict(self.stats)
 
+        total = s['total'] or 1
+
+        s['avg_mfe'] = s['sum_mfe'] / total
+        s['avg_mae'] = s['sum_mae'] / total
+
         if s['successful'] > 0:
             s['avg_price_change_per_successful'] = (s['sum_price_change_success'] / s['successful'])
-
         else:
             s['avg_price_change_per_successful'] = 0.0
 
