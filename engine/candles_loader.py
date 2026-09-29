@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 
 class CandlesLoader:
@@ -19,8 +20,6 @@ class CandlesLoader:
         df['DATETIME'] = pd.to_datetime(df['TIMESTAMP'], unit='s')
 
         df['TIMESTAMP'] = df['TIMESTAMP'].astype(int)
-        df['DATE'] = pd.to_datetime(df['DATE'], format="%d/%m/%Y").dt.date
-        df['TIME'] = pd.to_datetime(df['TIME'], format="%H:%M:%S").dt.time
 
         float_cols = ['OPEN', 'HIGH', 'LOW', 'CLOSE', 'VOLUME']
         df[float_cols] = df[float_cols].astype(float)
@@ -33,11 +32,14 @@ class CandlesLoader:
         df = self.load_all()
 
         if len(df) > 1:
+
             epochs_per_session = df['TIMESTAMP'].iloc[1] - df['TIMESTAMP'].iloc[0]
             end_epoch += end_session_offset * epochs_per_session
             start_epoch += start_session_offset * epochs_per_session
 
-        mask = (df['TIMESTAMP'] >= start_epoch) & (df['TIMESTAMP'] <= end_epoch)
-        filtered_df = df[mask]
+        timestamps = df['TIMESTAMP'].to_numpy()
 
-        return filtered_df.reset_index(drop=True)
+        idx_start = np.searchsorted(timestamps, start_epoch, side='left')
+        idx_end = np.searchsorted(timestamps, end_epoch, side='right')
+
+        return df.iloc[idx_start:idx_end].reset_index(drop=True)
