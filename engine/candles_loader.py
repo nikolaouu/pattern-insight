@@ -8,6 +8,7 @@ class CandlesLoader:
         self._cache_df = None
 
     def load_all(self) -> pd.DataFrame:
+
         if self._cache_df is not None:
             return self._cache_df
 
@@ -22,10 +23,11 @@ class CandlesLoader:
         float_cols = ['OPEN', 'HIGH', 'LOW', 'CLOSE', 'VOLUME']
         df[float_cols] = df[float_cols].astype(float)
 
-        self._cache = df
+        self._cache_df = df
         return df
 
     def get_range(self, start_epoch, end_epoch, start_session_offset=0, end_session_offset=0) -> pd.DataFrame:
+
         df = self.load_all()
 
         if len(df) > 1:

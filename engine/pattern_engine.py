@@ -210,23 +210,31 @@ class PatternEngine:
 
     def run(self, show_results=True, plot_patterns=False):
 
-        self.all_stats = []
+        results_per_session = {s: [] for s in self.sessions_open_list}
+        max_sessions = max(self.sessions_open_list)
 
-        for sessions_open in self.sessions_open_list:
+        for label, (start, end) in zip(self.interval_labels, self.intervals):
 
-            session_stats = []
+            candles = self.loader.get_range(
+                start,
+                end,
+                end_session_offset=max_sessions + self.evaluator.padding_right
+            )
 
-            for label, (start, end) in zip(self.interval_labels, self.intervals):
+            pattern_indices = self.evaluator.find_pattern_indices(
+                candles=candles,
+                end_epoch=end,
+                look_back=1
+            )
 
-                candles = self.loader.get_range(start, end, end_session_offset=sessions_open)
+            for sessions_open in self.sessions_open_list:
 
                 collector = StatsCollector()
 
-                for pattern, status in self.evaluator.detect_patterns(
+                for pattern, status in self.evaluator.evaluate_patterns(
                     candles=candles,
-                    look_back=1,
-                    sessions_open=sessions_open,
-                    end_epoch=end
+                    pattern_indices=pattern_indices,
+                    sessions_open=sessions_open
                 ):
                     collector.update(pattern, status)
 
@@ -239,9 +247,12 @@ class PatternEngine:
                         title=f"{plot_patterns} patterns for {label}, {sessions_open} sessions"
                     )
 
-                session_stats.append(collector.finalize())
+                results_per_session[sessions_open].append(collector.finalize())
 
-            self.all_stats.append((sessions_open, session_stats.copy()))
+        self.all_stats = [
+            (sessions_open, results_per_session[sessions_open])
+            for sessions_open in self.sessions_open_list
+        ]
 
         if show_results:
             self.show_stats_per_session()

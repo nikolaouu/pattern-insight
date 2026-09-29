@@ -21,7 +21,6 @@ class PatternEvaluator:
         self.padding_right = 5
 
     def plot_patterns(self, candles, lookback, sessions_open, mode=None, charts_per_plot=8, title=""):
-        # mode can have one of those values ['all', 'successful', 'failed', 'invalidated']
 
         if mode is None:
             mode = 'all'
@@ -29,13 +28,10 @@ class PatternEvaluator:
         list_to_use = []
         if mode == 'all':
             list_to_use = self.all_patterns_detected
-
         elif mode == 'successful':
             list_to_use = self.successful_patterns_detected
-
         elif mode == 'failed':
             list_to_use = self.failed_patterns_detected
-
         elif mode == 'invalidated':
             list_to_use = self.invalidated_patterns_detected
 
@@ -54,17 +50,26 @@ class PatternEvaluator:
         for p in actual_plots:
             plotter.plot_patterns(p, charts_per_plot=charts_per_plot, title=title)
 
-    def detect_patterns(self, candles, look_back, sessions_open, end_epoch):
+    def find_pattern_indices(self, candles, end_epoch, look_back=1):
 
-        self.all_patterns_detected = []
+        pattern_series = self.is_pattern(candles)
+        is_pattern_mask = pattern_series.to_numpy()
+
+        timestamps = candles['TIMESTAMP'].to_numpy()
+
+        valid_mask = (timestamps <= end_epoch) & is_pattern_mask
+        valid_mask[:look_back] = False
+        indices = np.where(valid_mask)[0].tolist()
+
+        return indices
+
+    def evaluate_patterns(self, candles, pattern_indices, sessions_open):
+
+        self.all_patterns_detected = pattern_indices
         self.successful_patterns_detected = []
         self.failed_patterns_detected = []
         self.invalidated_patterns_detected = []
 
-        pattern_series = self.is_pattern(candles)
-        is_pattern_mask = pattern_series.to_numpy() if hasattr(pattern_series, 'to_numpy') else pattern_series
-
-        timestamps = candles['TIMESTAMP'].to_numpy()
         closes = candles['CLOSE'].to_numpy()
         highs = candles['HIGH'].to_numpy()
         lows = candles['LOW'].to_numpy()
@@ -72,8 +77,9 @@ class PatternEvaluator:
         n_candles = len(candles)
         max_idx = n_candles - sessions_open - self.padding_right
 
-        for c in range(look_back, max_idx):
-            if timestamps[c] > end_epoch or not is_pattern_mask[c]:
+        for c in pattern_indices:
+
+            if c >= max_idx:
                 continue
 
             open_price = closes[c]
@@ -85,8 +91,6 @@ class PatternEvaluator:
                 invalidation_price=invalidation_price,
                 close_price=close_price
             )
-
-            self.all_patterns_detected.append(c)
 
             status = self._evaluate_pattern(
                 pattern=pattern,
@@ -129,15 +133,14 @@ class PatternEvaluator:
                 max_high = np.max(slice_highs)
                 min_low = np.min(slice_lows)
                 pattern.mfe = (max_high - pattern.open_price) / pattern.open_price
-                pattern.mae = (min_low - pattern.open_price) / pattern.open_price  # Negative percent
+                pattern.mae = (min_low - pattern.open_price) / pattern.open_price # Negative percent
                 is_inv = np.any(slice_lows <= pattern.invalidation_price)
             else:
                 max_high = np.max(slice_highs)
                 min_low = np.min(slice_lows)
                 pattern.mfe = (pattern.open_price - min_low) / pattern.open_price
-                pattern.mae = (pattern.open_price - max_high) / pattern.open_price  # Negative percent
+                pattern.mae = (pattern.open_price - max_high) / pattern.open_price # Negative percent
                 is_inv = np.any(slice_highs >= pattern.invalidation_price)
-
 
         else:
 
@@ -153,7 +156,6 @@ class PatternEvaluator:
                 if is_long:
                     pattern.mfe = (max_high - pattern.open_price) / pattern.open_price
                     pattern.mae = (min_low - pattern.open_price) / pattern.open_price
-
                 else:
                     pattern.mfe = (pattern.open_price - min_low) / pattern.open_price
                     pattern.mae = (pattern.open_price - max_high) / pattern.open_price
