@@ -110,13 +110,6 @@ class PatternEvaluator:
 
             yield pattern, status
 
-    def _build_pattern(self, candles, index, sessions_open):
-        return Pattern(
-            open_price=candles.at[index, 'CLOSE'],
-            invalidation_price=self.get_invalidation_val(candles, index),
-            close_price=candles.at[index + sessions_open, 'CLOSE']
-        )
-
     def _evaluate_pattern(self, pattern, candles, idx, sessions_open, highs=None, lows=None):
 
         start_idx = idx + 1
