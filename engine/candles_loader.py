@@ -16,6 +16,8 @@ class CandlesLoader:
 
         df.columns = df.columns.str.strip()
 
+        df['DATETIME'] = pd.to_datetime(df['TIMESTAMP'], unit='s')
+
         df['TIMESTAMP'] = df['TIMESTAMP'].astype(int)
         df['DATE'] = pd.to_datetime(df['DATE'], format="%d/%m/%Y").dt.date
         df['TIME'] = pd.to_datetime(df['TIME'], format="%H:%M:%S").dt.time

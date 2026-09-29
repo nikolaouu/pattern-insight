@@ -100,24 +100,15 @@ class Plotter:
 
         for df_slice in plots:
 
-            temp_p = []
+            date_nums = mdates.date2num(df_slice['DATETIME'])
 
-            for row in df_slice.itertuples():
-
-                if hasattr(row, 'DATE') and hasattr(row, 'TIME'):
-                    dt_val = pd.to_datetime(f"{row.DATE} {row.TIME}")
-                else:
-                    dt_val = pd.to_datetime(row.DATE)
-
-                new_candle = (
-                    mdates.date2num(dt_val),
-                    row.OPEN,
-                    row.HIGH,
-                    row.LOW,
-                    row.CLOSE
-                )
-
-                temp_p.append(new_candle)
+            temp_p = list(zip(
+                date_nums,
+                df_slice['OPEN'],
+                df_slice['HIGH'],
+                df_slice['LOW'],
+                df_slice['CLOSE']
+            ))
 
             final_plots.append(temp_p)
 
