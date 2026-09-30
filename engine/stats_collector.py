@@ -1,14 +1,17 @@
 from collections import defaultdict
+from .metrics import PerformanceMetrics
+
 
 class StatsCollector:
 
     def __init__(self):
-
         self.stats = None
+        self.price_changes = []
         self.reset()
 
     def reset(self):
         self.stats = defaultdict(float)
+        self.price_changes = []
         self.stats.update({
             'total': 0,
             'successful': 0,
@@ -20,10 +23,11 @@ class StatsCollector:
         })
 
     def update(self, pattern, status):
-
         self.stats['total'] += 1
         self.stats['sum_mfe'] += pattern.mfe
         self.stats['sum_mae'] += pattern.mae
+
+        self.price_changes.append(pattern.price_change)
 
         if status == 'successful':
             self.stats['successful'] += 1
@@ -36,10 +40,8 @@ class StatsCollector:
             self.stats['invalidated'] += 1
 
     def finalize(self):
-        """Return a clean stats dict."""
 
         s = dict(self.stats)
-
         total = s['total'] or 1
 
         s['avg_mfe'] = s['sum_mfe'] / total
@@ -49,5 +51,10 @@ class StatsCollector:
             s['avg_price_change_per_successful'] = (s['sum_price_change_success'] / s['successful'])
         else:
             s['avg_price_change_per_successful'] = 0.0
+
+        advanced_metrics = PerformanceMetrics.calculate_all(self.price_changes)
+        s.update(advanced_metrics)
+
+        s['price_changes'] = self.price_changes
 
         return s

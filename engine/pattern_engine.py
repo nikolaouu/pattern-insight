@@ -2,10 +2,11 @@ import os
 import pickle
 
 from rich.table import Table
-from rich import print
+from rich.console import Console
 
-from .stats_collector import StatsCollector
 from .plotter import Plotter
+from .metrics import PerformanceMetrics
+from .stats_collector import StatsCollector
 
 
 class PatternEngine:
@@ -37,25 +38,29 @@ class PatternEngine:
 
     def _print_session_stats(self, stats_list, title):
 
-        table = Table(title=title)
+        console = Console(width=180)
+
+        table = Table(title=title, title_style="bright_white", show_header=True)
 
         table.add_column("Interval", justify="center")
         table.add_column("Total", justify="center")
-        table.add_column("Successful", style="bright_green", justify="center")
-        table.add_column("Failed", style="bright_red", justify="center")
-        table.add_column("Invalidated", style="bright_magenta", justify="center")
-        table.add_column("Success %", style="bright_green", justify="center")
-        table.add_column("Failed %", style="bright_red", justify="center")
-        table.add_column("Invalidated %", style="bright_magenta", justify="center")
-        table.add_column("Avg Success Price Change %", style="bright_green", justify="center")
-        table.add_column("Avg MFE %", style="bright_cyan", justify="center")
-        table.add_column("Avg MAE %", style="bright_cyan", justify="center")
+        table.add_column("Succ", header_style="bright_green", style="bright_green", justify="center")
+        table.add_column("Fail", header_style="bright_red", style="bright_red", justify="center")
+        table.add_column("Inv", header_style="bright_magenta", style="bright_magenta", justify="center")
+        table.add_column("Succ%", header_style="bright_green", style="bright_green", justify="center")
+        table.add_column("Fail%", header_style="bright_red", style="bright_red", justify="center")
+        table.add_column("Inv%", header_style="bright_magenta", style="bright_magenta", justify="center")
+        table.add_column("Chg%", header_style="bright_green", style="bright_green", justify="center")
+        table.add_column("MFE%", header_style="bright_cyan", style="bright_cyan", justify="center")
+        table.add_column("MAE%", header_style="bright_cyan", style="bright_cyan", justify="center")
+        table.add_column("Sharpe", header_style="bright_yellow", style="bright_yellow", justify="center")
+        table.add_column("Sortino", header_style="bright_yellow", style="bright_yellow", justify="center")
+        table.add_column("MaxDD%", header_style="bright_red", style="bright_red", justify="center")
+        table.add_column("p-val", header_style="bright_cyan", style="bright_cyan", justify="center")
 
         n = len(stats_list)
         for i in range(n):
-
             label, stats = self.interval_labels[i], stats_list[i]
-
             total = stats["total"] or 1
 
             table.add_row(
@@ -67,9 +72,13 @@ class PatternEngine:
                 f"{int(stats['successful'] / total * 100)}",
                 f"{int(stats['failed'] / total * 100)}",
                 f"{int(stats['invalidated'] / total * 100)}",
-                f"{round(stats['avg_price_change_per_successful'] * 100, 3)}",
-                f"{round(stats.get('avg_mfe', 0.0) * 100, 3)}",
-                f"{round(stats.get('avg_mae', 0.0) * 100, 3)}",
+                f"{round(stats['avg_price_change_per_successful'] * 100, 2)}",
+                f"{round(stats.get('avg_mfe', 0.0) * 100, 2)}",
+                f"{round(stats.get('avg_mae', 0.0) * 100, 2)}",
+                f"{round(stats.get('sharpe_ratio', 0.0), 2)}",
+                f"{round(stats.get('sortino_ratio', 0.0), 2)}",
+                f"{round(stats.get('max_drawdown', 0.0) * 100, 2)}%",
+                f"{round(stats.get('p_value', 1.0), 4)}",
                 end_section=i == n - 1
             )
 
@@ -93,6 +102,12 @@ class PatternEngine:
         weighted_sum_mae = sum(s.get("avg_mae", 0.0) * s["total"] for s in stats_list)
         avg_mae_pct = (weighted_sum_mae / total_sum_safe) * 100
 
+        all_price_changes = []
+        for s in stats_list:
+            all_price_changes.extend(s.get('price_changes', []))
+
+        overall_metrics = PerformanceMetrics.calculate_all(all_price_changes)
+
         table.add_row(
             "[bright_yellow]SUM[/bright_yellow]",
             str(total_sum),
@@ -102,13 +117,17 @@ class PatternEngine:
             f"{success_pct}",
             f"{failed_pct}",
             f"{invalidated_pct}",
-            f"{round(avg_success_price_change_pct, 3)}",
-            f"{round(avg_mfe_pct, 3)}",
-            f"{round(avg_mae_pct, 3)}",
+            f"{round(avg_success_price_change_pct, 2)}",
+            f"{round(avg_mfe_pct, 2)}",
+            f"{round(avg_mae_pct, 2)}",
+            f"{round(overall_metrics['sharpe_ratio'], 2)}",
+            f"{round(overall_metrics['sortino_ratio'], 2)}",
+            f"{round(overall_metrics['max_drawdown'] * 100, 2)}%",
+            f"{round(overall_metrics['p_value'], 4)}",
             end_section=True
         )
 
-        print(table)
+        console.print(table)
 
     def show_stats_per_session(self, print_stats=True, plot_histogram=True):
 
