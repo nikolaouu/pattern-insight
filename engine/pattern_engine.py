@@ -227,14 +227,19 @@ class PatternEngine:
                 look_back=1
             )
 
+            prepared_patterns = self.evaluator.prepare_patterns_data(
+                candles=candles,
+                pattern_indices=pattern_indices
+            )
+
             for sessions_open in self.sessions_open_list:
 
                 collector = StatsCollector()
 
                 for pattern, status in self.evaluator.evaluate_patterns(
-                    candles=candles,
-                    pattern_indices=pattern_indices,
-                    sessions_open=sessions_open
+                        candles=candles,
+                        prepared_patterns=prepared_patterns,
+                        sessions_open=sessions_open
                 ):
                     collector.update(pattern, status)
 

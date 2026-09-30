@@ -63,9 +63,36 @@ class PatternEvaluator:
 
         return indices
 
-    def evaluate_patterns(self, candles, pattern_indices, sessions_open):
+    def prepare_patterns_data(self, candles, pattern_indices):
 
-        self.all_patterns_detected = pattern_indices
+        indices_arr = np.array(pattern_indices, dtype=np.int64)
+
+        closes = candles['CLOSE'].to_numpy()
+
+        open_prices = closes[indices_arr]
+
+        inv_prices = np.array(
+            [self.get_invalidation_val(candles, c) for c in pattern_indices],
+            dtype=np.float64
+        )
+
+        is_long = inv_prices < open_prices
+
+        return {
+            'indices': indices_arr,
+            'open_prices': open_prices,
+            'invalidation_prices': inv_prices,
+            'is_long': is_long
+        }
+
+    def evaluate_patterns(self, candles, prepared_patterns, sessions_open):
+
+        indices = prepared_patterns['indices']
+        open_prices = prepared_patterns['open_prices']
+        inv_prices = prepared_patterns['invalidation_prices']
+        is_long_arr = prepared_patterns['is_long']
+
+        self.all_patterns_detected = indices.tolist()
         self.successful_patterns_detected = []
         self.failed_patterns_detected = []
         self.invalidated_patterns_detected = []
@@ -77,13 +104,11 @@ class PatternEvaluator:
         n_candles = len(candles)
         max_idx = n_candles - sessions_open - self.padding_right
 
-        for c in pattern_indices:
+        for c, open_price, invalidation_price, is_long in zip(indices, open_prices, inv_prices, is_long_arr):
 
             if c >= max_idx:
                 continue
 
-            open_price = closes[c]
-            invalidation_price = self.get_invalidation_val(candles, c)
             close_price = closes[c + sessions_open]
 
             pattern = Pattern(
@@ -98,19 +123,22 @@ class PatternEvaluator:
                 idx=c,
                 sessions_open=sessions_open,
                 highs=highs,
-                lows=lows
+                lows=lows,
+                is_long=is_long
             )
 
             if status == 'successful':
                 self.successful_patterns_detected.append(c)
+
             elif status == 'failed':
                 self.failed_patterns_detected.append(c)
+
             elif status == 'invalidated':
                 self.invalidated_patterns_detected.append(c)
 
             yield pattern, status
 
-    def _evaluate_pattern(self, pattern, candles, idx, sessions_open, highs=None, lows=None):
+    def _evaluate_pattern(self, pattern, candles, idx, sessions_open, highs=None, lows=None, is_long=None):
 
         start_idx = idx + 1
         end_idx = idx + sessions_open + 1
@@ -120,19 +148,21 @@ class PatternEvaluator:
             slice_lows = lows[start_idx:end_idx]
             slice_highs = highs[start_idx:end_idx]
 
-            is_long = pattern.invalidation_price < pattern.open_price
+            if is_long is None:
+                is_long = pattern.invalidation_price < pattern.open_price
 
             if is_long:
                 max_high = np.max(slice_highs)
                 min_low = np.min(slice_lows)
                 pattern.mfe = (max_high - pattern.open_price) / pattern.open_price
-                pattern.mae = (min_low - pattern.open_price) / pattern.open_price # Negative percent
+                pattern.mae = (min_low - pattern.open_price) / pattern.open_price
                 is_inv = np.any(slice_lows <= pattern.invalidation_price)
+
             else:
                 max_high = np.max(slice_highs)
                 min_low = np.min(slice_lows)
                 pattern.mfe = (pattern.open_price - min_low) / pattern.open_price
-                pattern.mae = (pattern.open_price - max_high) / pattern.open_price # Negative percent
+                pattern.mae = (pattern.open_price - max_high) / pattern.open_price
                 is_inv = np.any(slice_highs >= pattern.invalidation_price)
 
         else:
@@ -144,11 +174,13 @@ class PatternEvaluator:
                 max_high = window['HIGH'].max()
                 min_low = window['LOW'].min()
 
-                is_long = pattern.invalidation_price < pattern.open_price
+                if is_long is None:
+                    is_long = pattern.invalidation_price < pattern.open_price
 
                 if is_long:
                     pattern.mfe = (max_high - pattern.open_price) / pattern.open_price
                     pattern.mae = (min_low - pattern.open_price) / pattern.open_price
+
                 else:
                     pattern.mfe = (pattern.open_price - min_low) / pattern.open_price
                     pattern.mae = (pattern.open_price - max_high) / pattern.open_price
