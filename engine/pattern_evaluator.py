@@ -68,7 +68,6 @@ class PatternEvaluator:
         indices_arr = np.array(pattern_indices, dtype=np.int64)
 
         closes = candles['CLOSE'].to_numpy()
-
         open_prices = closes[indices_arr]
 
         inv_prices = np.array(
@@ -78,24 +77,29 @@ class PatternEvaluator:
 
         is_long = inv_prices < open_prices
 
+        atrs = candles['ATR'].to_numpy()[indices_arr] if 'ATR' in candles.columns else np.ones(len(indices_arr))
+        trend_regimes = candles['TREND_REGIME'].to_numpy()[indices_arr] if 'TREND_REGIME' in candles.columns else np.array(['ALL'] * len(indices_arr))
+        vol_regimes = candles['VOL_REGIME'].to_numpy()[indices_arr] if 'VOL_REGIME' in candles.columns else np.array(['ALL'] * len(indices_arr))
+
         return {
             'indices': indices_arr,
             'open_prices': open_prices,
             'invalidation_prices': inv_prices,
-            'is_long': is_long
+            'is_long': is_long,
+            'atrs': atrs,
+            'trend_regimes': trend_regimes,
+            'vol_regimes': vol_regimes
         }
 
-    def evaluate_patterns(self, candles, prepared_patterns, sessions_open):
+    def evaluate_patterns(self, candles, prepared_patterns, sessions_open, target_trend_regime=None):
 
         indices = prepared_patterns['indices']
         open_prices = prepared_patterns['open_prices']
         inv_prices = prepared_patterns['invalidation_prices']
         is_long_arr = prepared_patterns['is_long']
-
-        self.all_patterns_detected = indices.tolist()
-        self.successful_patterns_detected = []
-        self.failed_patterns_detected = []
-        self.invalidated_patterns_detected = []
+        atrs = prepared_patterns['atrs']
+        trend_regimes = prepared_patterns['trend_regimes']
+        vol_regimes = prepared_patterns['vol_regimes']
 
         closes = candles['CLOSE'].to_numpy()
         highs = candles['HIGH'].to_numpy()
@@ -104,9 +108,14 @@ class PatternEvaluator:
         n_candles = len(candles)
         max_idx = n_candles - sessions_open - self.padding_right
 
-        for c, open_price, invalidation_price, is_long in zip(indices, open_prices, inv_prices, is_long_arr):
+        for c, open_price, invalidation_price, is_long, atr, trend, vol in zip(
+            indices, open_prices, inv_prices, is_long_arr, atrs, trend_regimes, vol_regimes
+        ):
 
             if c >= max_idx:
+                continue
+
+            if target_trend_regime is not None and trend != target_trend_regime:
                 continue
 
             close_price = closes[c + sessions_open]
@@ -114,7 +123,10 @@ class PatternEvaluator:
             pattern = Pattern(
                 open_price=open_price,
                 invalidation_price=invalidation_price,
-                close_price=close_price
+                close_price=close_price,
+                atr=atr,
+                trend_regime=trend,
+                vol_regime=vol
             )
 
             status = self._evaluate_pattern(
@@ -126,15 +138,6 @@ class PatternEvaluator:
                 lows=lows,
                 is_long=is_long
             )
-
-            if status == 'successful':
-                self.successful_patterns_detected.append(c)
-
-            elif status == 'failed':
-                self.failed_patterns_detected.append(c)
-
-            elif status == 'invalidated':
-                self.invalidated_patterns_detected.append(c)
 
             yield pattern, status
 

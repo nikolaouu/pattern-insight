@@ -7,6 +7,7 @@ from rich.console import Console
 from .plotter import Plotter
 from .metrics import PerformanceMetrics
 from .stats_collector import StatsCollector
+from .regime_filter import MarketRegimeFilter
 
 
 class PatternEngine:
@@ -53,6 +54,8 @@ class PatternEngine:
         table.add_column("Chg%", header_style="bright_green", style="bright_green", justify="center")
         table.add_column("MFE%", header_style="bright_cyan", style="bright_cyan", justify="center")
         table.add_column("MAE%", header_style="bright_cyan", style="bright_cyan", justify="center")
+        table.add_column("MFE(ATR)", header_style="bright_green", style="bright_green", justify="center")
+        table.add_column("MAE(ATR)", header_style="bright_red", style="bright_red", justify="center")
         table.add_column("Sharpe", header_style="bright_yellow", style="bright_yellow", justify="center")
         table.add_column("Sortino", header_style="bright_yellow", style="bright_yellow", justify="center")
         table.add_column("MaxDD%", header_style="bright_red", style="bright_red", justify="center")
@@ -75,6 +78,8 @@ class PatternEngine:
                 f"{round(stats['avg_price_change_per_successful'] * 100, 2)}",
                 f"{round(stats.get('avg_mfe', 0.0) * 100, 2)}",
                 f"{round(stats.get('avg_mae', 0.0) * 100, 2)}",
+                f"{round(stats.get('avg_mfe_atr', 0.0), 2)}x",
+                f"{round(stats.get('avg_mae_atr', 0.0), 2)}x",
                 f"{round(stats.get('sharpe_ratio', 0.0), 2)}",
                 f"{round(stats.get('sortino_ratio', 0.0), 2)}",
                 f"{round(stats.get('max_drawdown', 0.0) * 100, 2)}%",
@@ -120,6 +125,8 @@ class PatternEngine:
             f"{round(avg_success_price_change_pct, 2)}",
             f"{round(avg_mfe_pct, 2)}",
             f"{round(avg_mae_pct, 2)}",
+            f"{"--"}",
+            f"{"--"}",
             f"{round(overall_metrics['sharpe_ratio'], 2)}",
             f"{round(overall_metrics['sortino_ratio'], 2)}",
             f"{round(overall_metrics['max_drawdown'] * 100, 2)}%",
@@ -239,6 +246,8 @@ class PatternEngine:
                 end,
                 end_session_offset=max_sessions + self.evaluator.padding_right
             )
+
+            candles = MarketRegimeFilter.apply_regimes(candles)
 
             pattern_indices = self.evaluator.find_pattern_indices(
                 candles=candles,
