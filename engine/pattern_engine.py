@@ -234,6 +234,51 @@ class PatternEngine:
 
         return summary
 
+    def run_by_regime(self, target_regimes=None):
+
+        if target_regimes is None:
+            target_regimes = ['BULLISH', 'BEARISH', 'RANGING']
+
+        for regime in target_regimes:
+
+            print(f"\n=================== REGIME: {regime} ===================")
+
+            results_per_session = {s: [] for s in self.sessions_open_list}
+            max_sessions = max(self.sessions_open_list)
+
+            for label, (start, end) in zip(self.interval_labels, self.intervals):
+                candles = self.loader.get_range(
+                    start, end, end_session_offset=max_sessions + self.evaluator.padding_right
+                )
+                candles = MarketRegimeFilter.apply_regimes(candles)
+
+                pattern_indices = self.evaluator.find_pattern_indices(
+                    candles=candles, end_epoch=end, look_back=1
+                )
+                prepared_patterns = self.evaluator.prepare_patterns_data(
+                    candles=candles, pattern_indices=pattern_indices
+                )
+
+                for sessions_open in self.sessions_open_list:
+                    collector = StatsCollector()
+
+                    for pattern, status in self.evaluator.evaluate_patterns(
+                            candles=candles,
+                            prepared_patterns=prepared_patterns,
+                            sessions_open=sessions_open,
+                            target_trend_regime=regime
+                    ):
+                        collector.update(pattern, status)
+
+                    results_per_session[sessions_open].append(collector.finalize())
+
+            self.all_stats = [
+                (sessions_open, results_per_session[sessions_open])
+                for sessions_open in self.sessions_open_list
+            ]
+
+            self.show_stats_per_session(plot_histogram=False)
+
     def run(self, show_results=True, plot_patterns=False):
 
         results_per_session = {s: [] for s in self.sessions_open_list}
