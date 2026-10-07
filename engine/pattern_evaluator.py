@@ -13,27 +13,17 @@ class PatternEvaluator:
         self.is_invalidated = is_invalidated
         self.is_successful = is_successful
 
-        self.all_patterns_detected = []
-        self.successful_patterns_detected = []
-        self.failed_patterns_detected = []
-        self.invalidated_patterns_detected = []
-
         self.padding_right = 5
 
-    def plot_patterns(self, candles, lookback, sessions_open, mode=None, charts_per_plot=8, title=""):
+    def plot_patterns(self, candles, pattern_results, lookback, sessions_open, mode='all', charts_per_plot=8, title=""):
 
-        if mode is None:
-            mode = 'all'
-
-        list_to_use = []
         if mode == 'all':
-            list_to_use = self.all_patterns_detected
-        elif mode == 'successful':
-            list_to_use = self.successful_patterns_detected
-        elif mode == 'failed':
-            list_to_use = self.failed_patterns_detected
-        elif mode == 'invalidated':
-            list_to_use = self.invalidated_patterns_detected
+            list_to_use = [c for c, pattern, status in pattern_results]
+        else:
+            list_to_use = [c for c, pattern, status in pattern_results if status == mode]
+
+        if not list_to_use:
+            return
 
         plotter = Plotter()
 
@@ -139,7 +129,7 @@ class PatternEvaluator:
                 is_long=is_long
             )
 
-            yield pattern, status
+            yield c, pattern, status
 
     def _evaluate_pattern(self, pattern, candles, idx, sessions_open, highs=None, lows=None, is_long=None):
 

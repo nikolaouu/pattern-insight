@@ -92,18 +92,22 @@ class PatternEngine:
             for sessions_open in self.sessions_open_list:
 
                 collector = StatsCollector()
+                pattern_results = []
 
-                for pattern, status in self.evaluator.evaluate_patterns(
+                for c, pattern, status in self.evaluator.evaluate_patterns(
                         candles=candles,
                         prepared_patterns=prepared_patterns,
                         sessions_open=sessions_open
                 ):
 
                     collector.update(pattern, status)
+                    if plot_patterns:
+                        pattern_results.append((c, pattern, status))
 
-                if plot_patterns:
+                if plot_patterns and pattern_results:
                     self.evaluator.plot_patterns(
                         candles=candles,
+                        pattern_results=pattern_results,
                         lookback=1,
                         sessions_open=sessions_open,
                         mode=plot_patterns,
@@ -148,7 +152,8 @@ class PatternEngine:
 
                     collector = StatsCollector()
 
-                    for pattern, status in self.evaluator.evaluate_patterns(
+
+                    for c, pattern, status in self.evaluator.evaluate_patterns(
                             candles=candles,
                             prepared_patterns=prepared_patterns,
                             sessions_open=sessions_open,
