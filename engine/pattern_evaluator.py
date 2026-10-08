@@ -1,7 +1,7 @@
+import numpy as np
+
 from .pattern import Pattern
 from .plotter import Plotter
-
-import numpy as np
 
 
 class PatternEvaluator:
@@ -10,6 +10,7 @@ class PatternEvaluator:
 
         self.is_pattern = is_pattern
         self.get_invalidation_val = get_invalidation_val
+        self.is_invalidated = is_invalidated
         self.is_successful = is_successful
 
         self.padding_right = 5
@@ -81,40 +82,41 @@ class PatternEvaluator:
             'vol_regimes': vol_regimes
         }
 
-    def evaluate_patterns(self, candles, prepared_patterns, sessions_open, target_trend_regime=None):
+    def _filter_prepared_patterns(self, prepared_patterns, n_candles, sessions_open, target_trend_regime=None):
 
         indices = prepared_patterns['indices']
         if len(indices) == 0:
-            return
+            return None
 
-        open_prices = prepared_patterns['open_prices']
-        inv_prices = prepared_patterns['invalidation_prices']
-        is_long_arr = prepared_patterns['is_long']
-        atrs = prepared_patterns['atrs']
-        trend_regimes = prepared_patterns['trend_regimes']
-        vol_regimes = prepared_patterns['vol_regimes']
+        max_idx = n_candles - sessions_open - self.padding_right
+        mask = indices < max_idx
+
+        if target_trend_regime is not None:
+            mask &= (prepared_patterns['trend_regimes'] == target_trend_regime)
+
+        if not np.any(mask):
+            return None
+
+        return {
+            'indices': indices[mask],
+            'open_prices': prepared_patterns['open_prices'][mask],
+            'invalidation_prices': prepared_patterns['invalidation_prices'][mask],
+            'is_long': prepared_patterns['is_long'][mask],
+            'atrs': prepared_patterns['atrs'][mask],
+            'trend_regimes': prepared_patterns['trend_regimes'][mask],
+            'vol_regimes': prepared_patterns['vol_regimes'][mask],
+        }
+
+    def _calculate_metrics_vectorized(self, candles, filtered_patterns, sessions_open):
+
+        idx_filt = filtered_patterns['indices']
+        open_filt = filtered_patterns['open_prices']
+        inv_filt = filtered_patterns['invalidation_prices']
+        is_long_filt = filtered_patterns['is_long']
 
         closes = candles['CLOSE'].to_numpy()
         highs = candles['HIGH'].to_numpy()
         lows = candles['LOW'].to_numpy()
-
-        n_candles = len(candles)
-        max_idx = n_candles - sessions_open - self.padding_right
-
-        mask = indices < max_idx
-        if target_trend_regime is not None:
-            mask &= (trend_regimes == target_trend_regime)
-
-        if not np.any(mask):
-            return
-
-        idx_filt = indices[mask]
-        open_filt = open_prices[mask]
-        inv_filt = inv_prices[mask]
-        is_long_filt = is_long_arr[mask]
-        atrs_filt = atrs[mask]
-        trend_filt = trend_regimes[mask]
-        vol_filt = vol_regimes[mask]
 
         window_offsets = np.arange(1, sessions_open + 1)
         window_indices = idx_filt[:, None] + window_offsets
@@ -141,6 +143,42 @@ class PatternEvaluator:
         price_changes_long = (close_prices - open_filt) / open_filt
         price_changes_short = (open_filt - close_prices) / open_filt
         price_changes = np.where(is_long_filt, price_changes_long, price_changes_short)
+
+        return {
+            'close_prices': close_prices,
+            'mfe_arr': mfe_arr,
+            'mae_arr': mae_arr,
+            'is_inv_arr': is_inv_arr,
+            'price_changes': price_changes
+        }
+
+    def evaluate_patterns(self, candles, prepared_patterns, sessions_open, target_trend_regime=None):
+
+        filtered = self._filter_prepared_patterns(
+            prepared_patterns=prepared_patterns,
+            n_candles=len(candles),
+            sessions_open=sessions_open,
+            target_trend_regime=target_trend_regime
+        )
+
+        if filtered is None:
+            return
+
+        metrics = self._calculate_metrics_vectorized(candles, filtered, sessions_open)
+
+        idx_filt = filtered['indices']
+        open_filt = filtered['open_prices']
+        inv_filt = filtered['invalidation_prices']
+        is_long_filt = filtered['is_long']
+        atrs_filt = filtered['atrs']
+        trend_filt = filtered['trend_regimes']
+        vol_filt = filtered['vol_regimes']
+
+        close_prices = metrics['close_prices']
+        mfe_arr = metrics['mfe_arr']
+        mae_arr = metrics['mae_arr']
+        is_inv_arr = metrics['is_inv_arr']
+        price_changes = metrics['price_changes']
 
         for i in range(len(idx_filt)):
 
