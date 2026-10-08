@@ -139,25 +139,33 @@ class PatternEvaluator:
         mae_arr = np.where(is_long_filt, mae_long, mae_short)
         is_inv_arr = np.where(is_long_filt, inv_long, inv_short)
 
-        price_changes = (close_prices - open_filt) / open_filt
+        price_changes_long = (close_prices - open_filt) / open_filt
+        price_changes_short = (open_filt - close_prices) / open_filt
+        price_changes = np.where(is_long_filt, price_changes_long, price_changes_short)
 
         for i in range(len(idx_filt)):
+
             c = idx_filt[i]
+
             pattern = Pattern(
                 open_price=open_filt[i],
                 invalidation_price=inv_filt[i],
                 close_price=close_prices[i],
                 atr=atrs_filt[i],
                 trend_regime=trend_filt[i],
-                vol_regime=vol_filt[i]
+                vol_regime=vol_filt[i],
+                is_long=bool(is_long_filt[i])
             )
+
             pattern.mfe = float(mfe_arr[i])
             pattern.mae = float(mae_arr[i])
 
             if is_inv_arr[i]:
                 status = 'invalidated'
+
             elif self.is_successful(pattern, float(price_changes[i])):
                 status = 'successful'
+
             else:
                 status = 'failed'
 

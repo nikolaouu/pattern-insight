@@ -1,10 +1,11 @@
 class Pattern:
 
-    def __init__(self, open_price, invalidation_price, close_price, atr=None, trend_regime=None, vol_regime=None):
+    def __init__(self, open_price, invalidation_price, close_price, is_long, atr=None, trend_regime=None, vol_regime=None):
 
         self.open_price = open_price
         self.invalidation_price = invalidation_price
         self.close_price = close_price
+        self.is_long = is_long
 
         self.atr = atr if atr and atr > 0 else 1.0
 
@@ -16,19 +17,17 @@ class Pattern:
 
     @property
     def price_change(self):
-        return (self.close_price - self.open_price) / self.open_price
+        raw = (self.close_price - self.open_price) / self.open_price
+        return raw if self.is_long else -raw
 
     @property
     def price_change_atr(self):
-        """Μεταβολή τιμής εκφρασμένη σε πολλαπλάσια του ATR."""
         return (self.close_price - self.open_price) / self.atr
 
     @property
     def mfe_atr(self):
-        """MFE σε πολλαπλάσια του ATR."""
         return (self.mfe * self.open_price) / self.atr
 
     @property
     def mae_atr(self):
-        """MAE σε πολλαπλάσια του ATR."""
         return (self.mae * self.open_price) / self.atr

@@ -203,16 +203,27 @@ class PatternEngine:
             'price_changes': stats.get('price_changes', [])
         }
 
-    def _rebuild_all_stats_from_df(self):
+    def _rebuild_all_stats_from_df(self, target_regime=None):
 
         if self.results_df is None or self.results_df.empty:
             return
 
-        results_per_session = {s: [] for s in self.sessions_open_list}
+        available_regimes = self.results_df['regime'].unique()
 
-        regimes = self.results_df['regime'].unique()
-        target_regime = regimes[0]
+        if target_regime is None:
+
+            if 'ALL' in available_regimes:
+                target_regime = 'ALL'
+
+            else:
+                target_regime = available_regimes[0]
+
+        if target_regime not in available_regimes:
+            target_regime = available_regimes[0]
+
         df_filtered = self.results_df[self.results_df['regime'] == target_regime]
+
+        results_per_session = {s: [] for s in self.sessions_open_list}
 
         for s in self.sessions_open_list:
 
@@ -232,24 +243,40 @@ class PatternEngine:
 
         self.all_stats = [(s, results_per_session[s]) for s in self.sessions_open_list]
 
-    def show_stats_per_session(self, print_stats=True, plot_histogram=True):
+    def show_stats_per_session(self, regime=None, print_stats=True, plot_histogram=True):
+
+        if self.results_df is None or self.results_df.empty:
+            return
+
+        self._rebuild_all_stats_from_df(target_regime=regime)
 
         if self.all_stats is None:
             return
 
         plotter = Plotter()
+        active_regime = regime or ("ALL" if "ALL" in self.results_df['regime'].values else self.results_df['regime'].iloc[0])
 
         for session, session_stats in self.all_stats:
 
             if print_stats:
-                self._print_session_stats(session_stats, title=f"Sessions {session}")
+                self._print_session_stats(session_stats, title=f"Sessions {session} (Regime: {active_regime})")
 
             if plot_histogram:
-                plotter.plot_sessions_histogram(session_stats, title=f"Sessions {session}", labels=self.interval_labels)
+                plotter.plot_sessions_histogram(
+                    session_stats,
+                    title=f"Sessions {session} (Regime: {active_regime})",
+                    labels=self.interval_labels
+                )
 
-    def show_stats_progress_in_intervals(self, mode="both"):
+    def show_stats_progress_in_intervals(self, regime=None, mode="both"):
+
+        if self.results_df is None or self.results_df.empty:
+            return
+
+        self._rebuild_all_stats_from_df(target_regime=regime)
 
         plotter = Plotter()
+        active_regime = regime or ("ALL" if "ALL" in self.results_df['regime'].values else self.results_df['regime'].iloc[0])
 
         for i in range(len(self.intervals)):
 
@@ -274,7 +301,7 @@ class PatternEngine:
 
             plotter.plot_sessions_analysis(
                 summary=summary,
-                title=f"Interval: {interval_label} — Performance vs sessions_open ({mode})",
+                title=f"Interval: {interval_label} (Regime: {active_regime}) — Performance vs sessions_open ({mode})",
                 mode=mode
             )
 
