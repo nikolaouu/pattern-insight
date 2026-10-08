@@ -19,6 +19,7 @@ class PatternEvaluator:
 
         if mode == 'all':
             list_to_use = [c for c, pattern, status in pattern_results]
+
         else:
             list_to_use = [c for c, pattern, status in pattern_results if status == mode]
 
@@ -84,6 +85,9 @@ class PatternEvaluator:
     def evaluate_patterns(self, candles, prepared_patterns, sessions_open, target_trend_regime=None):
 
         indices = prepared_patterns['indices']
+        if len(indices) == 0:
+            return
+
         open_prices = prepared_patterns['open_prices']
         inv_prices = prepared_patterns['invalidation_prices']
         is_long_arr = prepared_patterns['is_long']
@@ -98,92 +102,63 @@ class PatternEvaluator:
         n_candles = len(candles)
         max_idx = n_candles - sessions_open - self.padding_right
 
-        for c, open_price, invalidation_price, is_long, atr, trend, vol in zip(
-            indices, open_prices, inv_prices, is_long_arr, atrs, trend_regimes, vol_regimes
-        ):
+        mask = indices < max_idx
+        if target_trend_regime is not None:
+            mask &= (trend_regimes == target_trend_regime)
 
-            if c >= max_idx:
-                continue
+        if not np.any(mask):
+            return
 
-            if target_trend_regime is not None and trend != target_trend_regime:
-                continue
+        idx_filt = indices[mask]
+        open_filt = open_prices[mask]
+        inv_filt = inv_prices[mask]
+        is_long_filt = is_long_arr[mask]
+        atrs_filt = atrs[mask]
+        trend_filt = trend_regimes[mask]
+        vol_filt = vol_regimes[mask]
 
-            close_price = closes[c + sessions_open]
+        window_offsets = np.arange(1, sessions_open + 1)
+        window_indices = idx_filt[:, None] + window_offsets
 
+        slice_highs = highs[window_indices]
+        slice_lows = lows[window_indices]
+
+        max_highs = np.max(slice_highs, axis=1)
+        min_lows = np.min(slice_lows, axis=1)
+        close_prices = closes[idx_filt + sessions_open]
+
+        mfe_long = (max_highs - open_filt) / open_filt
+        mae_long = (min_lows - open_filt) / open_filt
+        inv_long = np.any(slice_lows <= inv_filt[:, None], axis=1)
+
+        mfe_short = (open_filt - min_lows) / open_filt
+        mae_short = (open_filt - max_highs) / open_filt
+        inv_short = np.any(slice_highs >= inv_filt[:, None], axis=1)
+
+        mfe_arr = np.where(is_long_filt, mfe_long, mfe_short)
+        mae_arr = np.where(is_long_filt, mae_long, mae_short)
+        is_inv_arr = np.where(is_long_filt, inv_long, inv_short)
+
+        price_changes = (close_prices - open_filt) / open_filt
+
+        for i in range(len(idx_filt)):
+            c = idx_filt[i]
             pattern = Pattern(
-                open_price=open_price,
-                invalidation_price=invalidation_price,
-                close_price=close_price,
-                atr=atr,
-                trend_regime=trend,
-                vol_regime=vol
+                open_price=open_filt[i],
+                invalidation_price=inv_filt[i],
+                close_price=close_prices[i],
+                atr=atrs_filt[i],
+                trend_regime=trend_filt[i],
+                vol_regime=vol_filt[i]
             )
+            pattern.mfe = float(mfe_arr[i])
+            pattern.mae = float(mae_arr[i])
 
-            status = self._evaluate_pattern(
-                pattern=pattern,
-                candles=candles,
-                idx=c,
-                sessions_open=sessions_open,
-                highs=highs,
-                lows=lows,
-                is_long=is_long
-            )
+            if is_inv_arr[i]:
+                status = 'invalidated'
+            elif self.is_successful(pattern, float(price_changes[i])):
+                status = 'successful'
+            else:
+                status = 'failed'
 
             yield c, pattern, status
-
-    def _evaluate_pattern(self, pattern, candles, idx, sessions_open, highs=None, lows=None, is_long=None):
-
-        start_idx = idx + 1
-        end_idx = idx + sessions_open + 1
-
-        if highs is not None and lows is not None:
-
-            slice_lows = lows[start_idx:end_idx]
-            slice_highs = highs[start_idx:end_idx]
-
-            if is_long is None:
-                is_long = pattern.invalidation_price < pattern.open_price
-
-            if is_long:
-                max_high = np.max(slice_highs)
-                min_low = np.min(slice_lows)
-                pattern.mfe = (max_high - pattern.open_price) / pattern.open_price
-                pattern.mae = (min_low - pattern.open_price) / pattern.open_price
-                is_inv = np.any(slice_lows <= pattern.invalidation_price)
-
-            else:
-                max_high = np.max(slice_highs)
-                min_low = np.min(slice_lows)
-                pattern.mfe = (pattern.open_price - min_low) / pattern.open_price
-                pattern.mae = (pattern.open_price - max_high) / pattern.open_price
-                is_inv = np.any(slice_highs >= pattern.invalidation_price)
-
-        else:
-
-            window = candles.iloc[start_idx:end_idx]
-
-            if not window.empty:
-
-                max_high = window['HIGH'].max()
-                min_low = window['LOW'].min()
-
-                if is_long is None:
-                    is_long = pattern.invalidation_price < pattern.open_price
-
-                if is_long:
-                    pattern.mfe = (max_high - pattern.open_price) / pattern.open_price
-                    pattern.mae = (min_low - pattern.open_price) / pattern.open_price
-
-                else:
-                    pattern.mfe = (pattern.open_price - min_low) / pattern.open_price
-                    pattern.mae = (pattern.open_price - max_high) / pattern.open_price
-
-            is_inv = any(self.is_invalidated(pattern, row) for row in window.itertuples())
-
-        if is_inv:
-            return 'invalidated'
-
-        if self.is_successful(pattern, pattern.price_change):
-            return 'successful'
-
-        return 'failed'
