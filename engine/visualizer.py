@@ -7,7 +7,6 @@ import numpy as np
 
 class PatternVisualizer:
 
-
     def __init__(self, template="plotly_dark"):
 
         self.template = template

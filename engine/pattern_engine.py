@@ -63,65 +63,83 @@ class PatternEngine:
 
         return True
 
-    def run(self, show_results=True, plot_patterns=False):
+    def _process_interval(self, start, end, label, regime='ALL', target_trend_regime=None, plot_patterns=False):
 
         rows = []
         max_sessions = max(self.sessions_open_list)
 
-        for label, (start, end) in zip(self.interval_labels, self.intervals):
+        candles = self.loader.get_range(
+            start,
+            end,
+            end_session_offset=max_sessions + self.evaluator.padding_right
+        )
 
-            candles = self.loader.get_range(
-                start,
-                end,
-                end_session_offset=max_sessions + self.evaluator.padding_right
-            )
+        candles = MarketRegimeFilter.apply_regimes(candles)
 
-            candles = MarketRegimeFilter.apply_regimes(candles)
+        pattern_indices = self.evaluator.find_pattern_indices(
+            candles=candles,
+            end_epoch=end,
+            look_back=1
+        )
 
-            pattern_indices = self.evaluator.find_pattern_indices(
-                candles=candles,
-                end_epoch=end,
-                look_back=1
-            )
+        prepared_patterns = self.evaluator.prepare_patterns_data(
+            candles=candles,
+            pattern_indices=pattern_indices
+        )
 
-            prepared_patterns = self.evaluator.prepare_patterns_data(
-                candles=candles,
-                pattern_indices=pattern_indices
-            )
+        for sessions_open in self.sessions_open_list:
 
-            for sessions_open in self.sessions_open_list:
+            collector = StatsCollector()
+            pattern_results = []
 
-                collector = StatsCollector()
-                pattern_results = []
-
-                for c, pattern, status in self.evaluator.evaluate_patterns(
-                        candles=candles,
-                        prepared_patterns=prepared_patterns,
-                        sessions_open=sessions_open
-                ):
-
-                    collector.update(pattern, status)
-                    if plot_patterns:
-                        pattern_results.append((c, pattern, status))
-
-                if plot_patterns and pattern_results:
-                    self.evaluator.plot_patterns(
-                        candles=candles,
-                        pattern_results=pattern_results,
-                        lookback=1,
-                        sessions_open=sessions_open,
-                        mode=plot_patterns,
-                        title=f"{plot_patterns} patterns for {label}, {sessions_open} sessions"
-                    )
-
-                stats = collector.finalize()
-                row = self._create_data_row(
-                    interval=label,
-                    regime='ALL',
+            for c, pattern, status in self.evaluator.evaluate_patterns(
+                    candles=candles,
+                    prepared_patterns=prepared_patterns,
                     sessions_open=sessions_open,
-                    stats=stats
+                    target_trend_regime=target_trend_regime
+            ):
+
+                collector.update(pattern, status)
+                if plot_patterns:
+                    pattern_results.append((c, pattern, status))
+
+            if plot_patterns and pattern_results:
+
+                self.evaluator.plot_patterns(
+                    candles=candles,
+                    pattern_results=pattern_results,
+                    lookback=1,
+                    sessions_open=sessions_open,
+                    mode=plot_patterns,
+                    title=f"{plot_patterns} patterns for {label}, {sessions_open} sessions"
                 )
-                rows.append(row)
+
+            stats = collector.finalize()
+
+            row = self._create_data_row(
+                interval=label,
+                regime=regime,
+                sessions_open=sessions_open,
+                stats=stats
+            )
+
+            rows.append(row)
+
+        return rows
+
+    def run(self, show_results=True, plot_patterns=False):
+
+        rows = []
+        for label, (start, end) in zip(self.interval_labels, self.intervals):
+            interval_rows = self._process_interval(
+                start=start,
+                end=end,
+                label=label,
+                regime='ALL',
+                target_trend_regime=None,
+                plot_patterns=plot_patterns
+            )
+            rows.extend(interval_rows)
 
         self.results_df = pd.DataFrame(rows)
         self._rebuild_all_stats_from_df()
@@ -136,44 +154,20 @@ class PatternEngine:
             target_regimes = ['BULLISH', 'BEARISH', 'RANGING']
 
         rows = []
-        max_sessions = max(self.sessions_open_list)
-
         for regime in target_regimes:
-
             for label, (start, end) in zip(self.interval_labels, self.intervals):
-
-                candles = self.loader.get_range(start, end, end_session_offset=max_sessions + self.evaluator.padding_right)
-                candles = MarketRegimeFilter.apply_regimes(candles)
-
-                pattern_indices = self.evaluator.find_pattern_indices(candles=candles, end_epoch=end, look_back=1)
-                prepared_patterns = self.evaluator.prepare_patterns_data(candles=candles, pattern_indices=pattern_indices)
-
-                for sessions_open in self.sessions_open_list:
-
-                    collector = StatsCollector()
-
-
-                    for c, pattern, status in self.evaluator.evaluate_patterns(
-                            candles=candles,
-                            prepared_patterns=prepared_patterns,
-                            sessions_open=sessions_open,
-                            target_trend_regime=regime
-                    ):
-
-                        collector.update(pattern, status)
-
-                    stats = collector.finalize()
-                    row = self._create_data_row(
-                        interval=label,
-                        regime=regime,
-                        sessions_open=sessions_open,
-                        stats=stats
-                    )
-                    rows.append(row)
+                interval_rows = self._process_interval(
+                    start=start,
+                    end=end,
+                    label=label,
+                    regime=regime,
+                    target_trend_regime=regime,
+                    plot_patterns=False
+                )
+                rows.extend(interval_rows)
 
         self.results_df = pd.DataFrame(rows)
         self._rebuild_all_stats_from_df()
-
     def _create_data_row(self, interval, regime, sessions_open, stats):
 
         total = stats['total'] or 1

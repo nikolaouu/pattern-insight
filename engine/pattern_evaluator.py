@@ -10,7 +10,6 @@ class PatternEvaluator:
 
         self.is_pattern = is_pattern
         self.get_invalidation_val = get_invalidation_val
-        self.is_invalidated = is_invalidated
         self.is_successful = is_successful
 
         self.padding_right = 5
