@@ -5,13 +5,17 @@ from .metrics import PerformanceMetrics
 class StatsCollector:
 
     def __init__(self):
+
         self.stats = None
+
         self.price_changes = []
         self.reset()
 
     def reset(self):
+
         self.stats = defaultdict(float)
         self.price_changes = []
+
         self.stats.update({
             'total': 0,
             'successful': 0,

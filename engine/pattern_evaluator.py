@@ -1,7 +1,6 @@
 import numpy as np
 
 from .pattern import Pattern
-from .plotter import Plotter
 
 
 class PatternEvaluator:
@@ -14,32 +13,6 @@ class PatternEvaluator:
         self.is_successful = is_successful
 
         self.padding_right = 5
-
-    def plot_patterns(self, candles, pattern_results, lookback, sessions_open, mode='all', charts_per_plot=8, title=""):
-
-        if mode == 'all':
-            list_to_use = [c for c, pattern, status in pattern_results]
-
-        else:
-            list_to_use = [c for c, pattern, status in pattern_results if status == mode]
-
-        if not list_to_use:
-            return
-
-        plotter = Plotter()
-
-        plots = [
-            candles.iloc[p - lookback : p + sessions_open + self.padding_right]
-            for p in list_to_use
-        ]
-
-        actual_plots = [
-            plots[i: i + charts_per_plot]
-            for i in range(0, len(plots), charts_per_plot)
-        ]
-
-        for p in actual_plots:
-            plotter.plot_patterns(p, charts_per_plot=charts_per_plot, title=title)
 
     def find_pattern_indices(self, candles, end_epoch, look_back=1):
 

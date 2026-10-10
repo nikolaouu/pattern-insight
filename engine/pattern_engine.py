@@ -105,7 +105,8 @@ class PatternEngine:
 
             if plot_patterns and pattern_results:
 
-                self.evaluator.plot_patterns(
+                plotter = Plotter()
+                plotter.plot_pattern_results(
                     candles=candles,
                     pattern_results=pattern_results,
                     lookback=1,
@@ -130,7 +131,9 @@ class PatternEngine:
     def run(self, show_results=True, plot_patterns=False):
 
         rows = []
+
         for label, (start, end) in zip(self.interval_labels, self.intervals):
+
             interval_rows = self._process_interval(
                 start=start,
                 end=end,
@@ -139,6 +142,7 @@ class PatternEngine:
                 target_trend_regime=None,
                 plot_patterns=plot_patterns
             )
+
             rows.extend(interval_rows)
 
         self.results_df = pd.DataFrame(rows)
@@ -168,6 +172,7 @@ class PatternEngine:
 
         self.results_df = pd.DataFrame(rows)
         self._rebuild_all_stats_from_df()
+
     def _create_data_row(self, interval, regime, sessions_open, stats):
 
         total = stats['total'] or 1

@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from mplfinance.original_flavor import candlestick_ohlc
@@ -11,6 +10,31 @@ class Plotter:
         self.width = width
         self.dpi = dpi
         self.figsize = figsize
+
+        self.padding_right = 5
+
+    def plot_pattern_results(self, candles, pattern_results, lookback, sessions_open, mode='all', charts_per_plot=8, title=""):
+
+        if mode == 'all':
+            list_to_use = [c for c, pattern, status in pattern_results]
+        else:
+            list_to_use = [c for c, pattern, status in pattern_results if status == mode]
+
+        if not list_to_use:
+            return
+
+        plots = [
+            candles.iloc[p - lookback : p + sessions_open + self.padding_right]
+            for p in list_to_use
+        ]
+
+        actual_plots = [
+            plots[i: i + charts_per_plot]
+            for i in range(0, len(plots), charts_per_plot)
+        ]
+
+        for p in actual_plots:
+            self.plot_patterns(p, charts_per_plot=charts_per_plot, title=title)
 
     def plot_sessions_histogram(self, stats_list, labels, title):
 
