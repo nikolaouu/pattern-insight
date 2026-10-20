@@ -53,6 +53,16 @@ class PatternEngine:
     4. Call reporting methods (tables, plots) -- they rebuild
        ``all_stats`` on the fly from ``results_df``, so they work after a
        reload without re-running the evaluation.
+
+    Timeframe awareness
+    -------------------
+    The engine is timeframe-agnostic. Annualization of Sharpe/Sortino
+    is derived from the candle duration exposed by the loader, so the
+    same code produces correct results for 1m, 5m, 1h, 4h or daily
+    data without configuration. If a different convention is needed
+    (e.g. daily-equivalent Sharpe for intraday data), it can be
+    overridden by passing a custom ``periods_per_year`` to the loader,
+    the collector, or a future constructor parameter on the engine.
     """
 
     def __init__(self, loader, evaluator, intervals, interval_labels, sessions_open_list):
@@ -68,6 +78,15 @@ class PatternEngine:
                 datacube and is relied upon by reporting.
             sessions_open_list: List of holding horizons (in candles) to
                 evaluate for each interval.
+
+        Annualization
+        -------------
+        ``self.periods_per_year`` is derived automatically from the loader's
+        inferred candle duration (see ``CandlesLoader.get_periods_per_year``)
+        and is threaded down to ``StatsCollector`` -> ``PerformanceMetrics``
+        so that Sharpe/Sortino are scaled for the dataset's actual timeframe.
+        This is preferred over the historical hardcoded ``252``, which
+        silently assumed daily data.
         """
         self.loader = loader
         self.evaluator = evaluator
@@ -77,6 +96,8 @@ class PatternEngine:
 
         self.results_df = None
         self.all_stats = None
+
+        self.periods_per_year = loader.get_periods_per_year()
 
         self.visualizer = PatternVisualizer()
 
@@ -212,7 +233,7 @@ class PatternEngine:
 
         for sessions_open in self.sessions_open_list:
 
-            collector = StatsCollector()
+            collector = StatsCollector(self.periods_per_year)
             pattern_results = []
 
             # Stream evaluated patterns into the collector. Optionally
@@ -357,6 +378,11 @@ class PatternEngine:
         such cells will appear with 0.0 rates, which is the intended
         neutral value.
 
+        The ``periods_per_year`` column is stored for self-documentation:
+        after ``load_results``, the annualization factor used for
+        Sharpe/Sortino is recoverable from the dataframe, so the absolute
+        scale of those ratios is unambiguous.
+
         Column schema is stable and is relied upon by the reporting
         methods; adding a metric requires updating this method *and* any
         reporting code that reads the new column.
@@ -367,6 +393,7 @@ class PatternEngine:
             'interval': interval,
             'regime': regime,
             'session_open': sessions_open,
+            'periods_per_year': self.periods_per_year,
             'total': stats['total'],
             'successful': stats['successful'],
             'failed': stats['failed'],

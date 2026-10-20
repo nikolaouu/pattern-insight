@@ -14,6 +14,9 @@ class CandlesLoader:
         * Provide inclusive/exclusive range slicing by epoch, with an
           optional offset expressed in *sessions* (candles) rather than
           in raw seconds.
+        * Infer the candle duration (and derived ``periods_per_year``)
+          from the timestamp deltas, so that downstream annualization
+          of Sharpe/Sortino is correct for any timeframe.
 
     Contract
     --------
@@ -159,3 +162,15 @@ class CandlesLoader:
         # prior slicing. reset_index(drop=True) restores a RangeIndex,
         # which the rest of the pipeline assumes.
         return df.iloc[idx_start:idx_end].reset_index(drop=True)
+
+    def get_epochs_per_session(self) -> int:
+        """Candle duration in seconds, inferred from the first two rows."""
+        df = self.load_all()
+        if len(df) < 2:
+            raise ValueError("Need at least 2 candles to infer duration.")
+        return int(df['TIMESTAMP'].iloc[1] - df['TIMESTAMP'].iloc[0])
+
+    def get_periods_per_year(self) -> float:
+        """Number of candles per calendar year (365.25 days)."""
+        seconds_per_year = 365.25 * 24 * 3600
+        return seconds_per_year / self.get_epochs_per_session()

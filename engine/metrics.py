@@ -4,7 +4,16 @@ from scipy import stats
 
 class PerformanceMetrics:
     """
-    Stateless collection of distribution-based performance metrics.
+    Collection of distribution-based performance metrics.
+
+    Unlike earlier revisions, this class is *stateful*: it is
+    constructed with a ``periods_per_year`` value that is reused by
+    every Sharpe/Sortino computation. The value is typically derived
+    automatically from the dataset's candle duration (see
+    ``CandlesLoader.get_periods_per_year``) and threaded through
+    ``PatternEngine`` -> ``StatsCollector`` -> here, so that
+    annualization is correct for any timeframe (1m, 1h, 4h, 1d, ...)
+    rather than assuming daily bars.
 
     All methods operate on a 1-D array of *signed* returns (fractions, e.g.
     0.02 == 2%) and are direction-agnostic: the caller is expected to have
@@ -15,10 +24,11 @@ class PerformanceMetrics:
     ------------
     * Every method is defensive: short samples, zero variance and NaN
       inputs return neutral values (0.0 or 1.0) instead of raising.
-    * Annualization assumes daily bars (``periods_per_year=252``). This is
-      a nominal convention used for cross-cell comparability; it does not
-      imply the underlying data is daily. Changing this constant rescales
-      Sharpe/Sortino but leaves their ranking intact.
+    * ``periods_per_year`` is a constructor argument, not a per-call
+      default. This avoids silent mistakes where a caller forgets to
+      pass the correct annualization factor for the timeframe in use.
+      The scaling affects Sharpe/Sortino in absolute terms but not their
+      ranking across cells.
     * These metrics are computed *per cell* of the results datacube
       (one (interval, sessions_open, regime) combination), not on a
       portfolio equity curve. As a consequence:
@@ -28,12 +38,22 @@ class PerformanceMetrics:
           of "is the average return statistically distinguishable from 0?".
     """
 
+    def __init__(self, periods_per_year):
+        """
+        Args:
+            periods_per_year: Annualization factor for Sharpe/Sortino.
+                Typically derived from the candle timeframe via
+                ``CandlesLoader.get_periods_per_year()`` (~8766 for 1h,
+                ~365.25 for daily, etc.). Use 252 for a
+                daily-equivalent convention on intraday data.
+        """
+        self.periods_per_year = periods_per_year
+
     # ------------------------------------------------------------------ #
     # Risk-adjusted return
     # ------------------------------------------------------------------ #
 
-    @staticmethod
-    def calculate_sharpe_ratio(returns: np.ndarray, risk_free_rate: float = 0.0, periods_per_year: float = 252.0) -> float:
+    def calculate_sharpe_ratio(self, returns: np.ndarray, risk_free_rate: float = 0.0) -> float:
         """
         Annualized Sharpe ratio: mean excess return divided by its
         standard deviation, scaled by ``sqrt(periods_per_year)``.
@@ -58,10 +78,9 @@ class PerformanceMetrics:
 
         mean_return = np.mean(excess_returns)
 
-        return float((mean_return / std) * np.sqrt(periods_per_year))
+        return float((mean_return / std) * np.sqrt(self.periods_per_year))
 
-    @staticmethod
-    def calculate_sortino_ratio(returns: np.ndarray, risk_free_rate: float = 0.0, periods_per_year: float = 252.0) -> float:
+    def calculate_sortino_ratio(self, returns: np.ndarray, risk_free_rate: float = 0.0,) -> float:
         """
         Annualized Sortino ratio: mean excess return divided by the
         *downside* deviation (root-mean-square of negative excess returns).
@@ -96,7 +115,7 @@ class PerformanceMetrics:
             return 0.0
 
         mean_return = np.mean(excess_returns)
-        return float((mean_return / downside_std) * np.sqrt(periods_per_year))
+        return float((mean_return / downside_std) * np.sqrt(self.periods_per_year))
 
     # ------------------------------------------------------------------ #
     # Drawdown
@@ -212,8 +231,7 @@ class PerformanceMetrics:
     # Aggregator
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def calculate_all(cls, returns: list or np.ndarray, risk_free_rate: float = 0.0) -> dict:
+    def calculate_all(self, returns, risk_free_rate: float = 0.0) -> dict:
         """
         Compute the full metric bundle for a single cell.
 
@@ -231,6 +249,10 @@ class PerformanceMetrics:
         Returns:
             dict with keys: sharpe_ratio, sortino_ratio, max_drawdown,
             p_value, skewness, kurtosis.
+
+        Note: this is an *instance* method (not a classmethod) because it
+        must have access to ``self.periods_per_year`` for the
+        Sharpe/Sortino calculations.
         """
         ret_arr = np.array(returns, dtype=np.float64)
 
@@ -245,10 +267,10 @@ class PerformanceMetrics:
             }
 
         return {
-            'sharpe_ratio': cls.calculate_sharpe_ratio(ret_arr, risk_free_rate),
-            'sortino_ratio': cls.calculate_sortino_ratio(ret_arr, risk_free_rate),
-            'max_drawdown': cls.calculate_max_drawdown(ret_arr),
-            'p_value': cls.calculate_p_value(ret_arr),
-            'skewness': cls.calculate_skewness(ret_arr),
-            'kurtosis': cls.calculate_kurtosis(ret_arr),
+            'sharpe_ratio': self.calculate_sharpe_ratio(ret_arr, risk_free_rate),
+            'sortino_ratio': self.calculate_sortino_ratio(ret_arr, risk_free_rate),
+            'max_drawdown': self.calculate_max_drawdown(ret_arr),
+            'p_value': self.calculate_p_value(ret_arr),
+            'skewness': self.calculate_skewness(ret_arr),
+            'kurtosis': self.calculate_kurtosis(ret_arr),
         }

@@ -25,15 +25,24 @@ class StatsCollector:
     (interval, sessions_open, regime) cell of the results datacube.
     """
 
-    def __init__(self):
+    def __init__(self, periods_per_year):
         """
         Initialize an empty collector.
+
+        Args:
+            periods_per_year: Annualization factor for Sharpe/Sortino.
+                Threaded through from ``PatternEngine``, which derives it
+                from ``CandlesLoader.get_periods_per_year()``. Kept as a
+                required argument (no default) to force callers to be
+                explicit about the timeframe convention.
 
         Note: ``self.stats`` is assigned here only to satisfy linters;
         the authoritative initialization happens in ``reset``, which is
         also used to recycle an instance between cells.
         """
         self.stats = None
+
+        self._metrics = PerformanceMetrics(periods_per_year)
 
         self.price_changes = []
         self.reset()
@@ -117,7 +126,9 @@ class StatsCollector:
         3. Delegate distribution-based metrics (Sharpe, Sortino, max
            drawdown, p-value, skewness, kurtosis) to
            ``PerformanceMetrics.calculate_all``, which receives the full
-           ``price_changes`` series.
+           ``price_changes`` series. The ``PerformanceMetrics`` instance
+           was created in ``__init__`` with the correct annualization
+           factor, so Sharpe/Sortino are scaled for the dataset's timeframe.
 
         The returned dict is a plain ``dict`` (not the internal
         ``defaultdict``) and also embeds the raw ``price_changes`` list so
@@ -143,7 +154,7 @@ class StatsCollector:
             s['avg_price_change_per_successful'] = 0.0
 
         # Distribution-based metrics over the full return series.
-        advanced_metrics = PerformanceMetrics.calculate_all(self.price_changes)
+        advanced_metrics = self._metrics.calculate_all(self.price_changes)
         s.update(advanced_metrics)
 
         # Persist the raw series so it can travel with the results dataframe.
